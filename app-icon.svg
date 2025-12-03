@@ -1,0 +1,37 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <mask id="diagonalMask">
+      <rect x="0" y="0" width="1024" height="1024" fill="white" />
+      <polygon points="0,1024 1024,0 1024,1024" fill="black" />
+    </mask>
+  </defs>
+
+  <!-- 1. Base Background (Dark Theme / Night Side) -->
+  <rect x="64" y="64" width="896" height="896" rx="224" ry="224" fill="#0f172a" />
+
+  <!-- 2. Overlay Background (Light Theme / Day Side) -->
+  <g mask="url(#diagonalMask)">
+    <rect x="64" y="64" width="896" height="896" rx="224" ry="224" fill="#f8fafc" />
+  </g>
+
+  <!-- 3. Central Element: The Switch Capsule -->
+  <!-- Minimalist Reverse-Color Style -->
+  <g transform="translate(512, 512)">
+    
+    <!-- The Track (Background of the switch) -->
+    <!-- Dark Side Part (Visible on Light Background) -->
+    <rect x="-250" y="-120" width="500" height="240" rx="120" fill="#1e293b" />
+    
+    <!-- Light Side Part (Visible on Dark Background) -->
+    <g>
+      <defs>
+        <clipPath id="clipBottomRight">
+           <polygon points="-512,512 512,-512 512,512" />
+        </clipPath>
+      </defs>
+      <rect x="-250" y="-120" width="500" height="240" rx="120" fill="#e2e8f0" clip-path="url(#clipBottomRight)" />
+    </g>
+    
+    <!-- No decorations, pure geometric minimalism -->
+  </g>
+</svg>

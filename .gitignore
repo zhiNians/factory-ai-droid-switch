@@ -1,0 +1,99 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+out/
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Testing & Coverage
+coverage/
+*.profraw
+*.profdata
+.nyc_output
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local
+
+# IDEs and Editors
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# AI Tools
+.claude/
+.cursor/
+.aider*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+.temp/
+tmp/
+
+# Package manager lock files (keep pnpm-lock.yaml for reproducible builds)
+# Uncomment the following line if you don't want to commit lock files
+# pnpm-lock.yaml
+# yarn.lock
+# package-lock.json
+
+# Rust (keep Cargo.lock for binary crates, ignore for libraries)
+# For binary projects like Tauri apps, Cargo.lock should be committed
+# src-tauri/Cargo.lock
+
+# Debug files
+*.pdb
+*.dSYM/
+
+# Application specific
+.factory-ai-droid-switch/
+config.json.backup
