@@ -253,29 +253,24 @@ fn install_powershell_wrapper() -> Result<(), String> {
 
     let powershell_function = r#"
 # factory-ai-droid-switch Wrapper Start
-# Version: 2
+# Version: 4
 function droid {
     $configPath = "$env:USERPROFILE\.factory\config.json"
     if (Test-Path $configPath) {
         try {
             $config = Get-Content $configPath -Raw | ConvertFrom-Json
-            if ($config.api_key) {
-                $env:FACTORY_API_KEY = $config.api_key
-            }
+            if ($config.api_key) { $env:FACTORY_API_KEY = $config.api_key }
         } catch { }
     }
-    $droidExe = Get-Command droid -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Extension -ieq '.exe' } | Select-Object -First 1
-    if ($droidExe) {
-        & $droidExe.Source @args
-    } else {
-        Write-Error "droid.exe not found. Please install Factory CLI first."
-    }
+    $droidExe = Get-Command droid -All -ErrorAction SilentlyContinue | Where-Object { $_.CommandType -eq 'Application' -and $_.Extension -ieq '.exe' } | Select-Object -First 1
+    if ($droidExe) { & $droidExe.Source @args }
+    else { Write-Error "droid.exe not found. Please install Factory CLI first." }
 }
 # factory-ai-droid-switch Wrapper End"#;
 
     let marker_start = "# factory-ai-droid-switch Wrapper Start";
     let marker_end = "# factory-ai-droid-switch Wrapper End";
-    let current_version = "# Version: 2";
+    let current_version = "# Version: 4";
 
     // 确保目录存在
     if let Some(parent) = ps_profile.parent() {
@@ -325,12 +320,19 @@ fn install_cmd_wrapper() -> Result<(), String> {
     let bin_dir = home.join(".factory").join("bin");
     let cmd_wrapper = bin_dir.join("droid.cmd");
     
-    // 批处理文件内容（简化版，纯 ASCII）
+    // CMD wrapper: use temp file to avoid quote issues, use PowerShell to find droid.exe
     let batch_content = r#"@echo off
 setlocal enabledelayedexpansion
 set "CF=%USERPROFILE%\.factory\config.json"
-if exist "%CF%" for /f "delims=" %%a in ('powershell -NoProfile -Command "(gc '%CF%'|ConvertFrom-Json).api_key" 2^>nul') do set "FACTORY_API_KEY=%%a"
-for /f "delims=" %%i in ('where droid 2^>nul') do if /i "%%~xi"==".exe" "%%i" %* & exit /b !errorlevel!
+set "FACTORY_API_KEY="
+if exist "%CF%" (
+    set "TK=%TEMP%\droid_key_%RANDOM%.txt"
+    powershell -NoProfile -Command "$k=(gc '%CF%'|ConvertFrom-Json).api_key;if($k){$k|Out-File '%TK%' -Encoding ASCII -NoNewline}" >nul 2>&1
+    if exist "!TK!" (set /p FACTORY_API_KEY=<"!TK!"& del "!TK!" >nul 2>&1)
+)
+set "DROID_EXE="
+for /f "delims=" %%e in ('powershell -NoProfile -Command "$env:Path-split';'|%%{$x=Join-Path $_ 'droid.exe';if(Test-Path $x){$x;break}}"') do set "DROID_EXE=%%e"
+if defined DROID_EXE ("%DROID_EXE%" %*& exit /b !errorlevel!)
 echo droid.exe not found
 exit /b 1
 "#;
@@ -339,11 +341,10 @@ exit /b 1
     std::fs::create_dir_all(&bin_dir)
         .map_err(|e| format!("创建 bin 目录失败: {}", e))?;
 
-    // 检查是否需要更新（简单比较内容）
+    // 检查是否需要更新（检查新版本特征：临时文件方式 + PowerShell 查找）
     if cmd_wrapper.exists() {
         let existing = std::fs::read_to_string(&cmd_wrapper).unwrap_or_default();
-        // 检查是否包含新版本的关键特征（使用 CF 变量和单行 for 语句）
-        if existing.contains("set \"CF=%USERPROFILE%") && existing.contains("& exit /b") {
+        if existing.contains("droid_key_%RANDOM%") && existing.contains("Path-split") {
             log::info!("CMD 批处理文件已是最新版本");
             return Ok(());
         }
