@@ -1,7 +1,7 @@
 {
   "name": "factory-ai-droid-switch",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Factory AI API Key 管理工具",
   "author": "Droid Switch",
   "license": "MIT",
