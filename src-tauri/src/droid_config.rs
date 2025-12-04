@@ -163,7 +163,6 @@ fn install_unix_wrapper() -> Result<(), String> {
     
     let shell_function = r#"
 # factory-ai-droid-switch Wrapper Start
-# 此函数由 factory-ai-droid-switch 自动生成，用于动态加载 API Key
 # Version: 2
 droid() {
     local api_key=""
@@ -254,7 +253,6 @@ fn install_powershell_wrapper() -> Result<(), String> {
 
     let powershell_function = r#"
 # factory-ai-droid-switch Wrapper Start
-# 此函数由 factory-ai-droid-switch 自动生成，用于动态加载 API Key
 # Version: 2
 function droid {
     $configPath = "$env:USERPROFILE\.factory\config.json"
@@ -264,16 +262,13 @@ function droid {
             if ($config.api_key) {
                 $env:FACTORY_API_KEY = $config.api_key
             }
-        } catch {
-            # 忽略解析错误
-        }
+        } catch { }
     }
-    # 查找原始的 droid.exe（只匹配 .exe 文件，排除 .cmd/.bat）
-    $droidExe = Get-Command droid -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.exe' } | Select-Object -First 1
+    $droidExe = Get-Command droid -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Extension -ieq '.exe' } | Select-Object -First 1
     if ($droidExe) {
         & $droidExe.Source @args
     } else {
-        Write-Error "找不到 droid.exe，请确保已正确安装 Factory CLI"
+        Write-Error "droid.exe not found. Please install Factory CLI first."
     }
 }
 # factory-ai-droid-switch Wrapper End"#;
@@ -330,55 +325,34 @@ fn install_cmd_wrapper() -> Result<(), String> {
     let bin_dir = home.join(".factory").join("bin");
     let cmd_wrapper = bin_dir.join("droid.cmd");
     
-    // 批处理文件内容
-    // 使用 PowerShell 来解析 JSON（CMD 原生不支持 JSON 解析）
-    // 通过检查扩展名为 .exe 来避免递归调用自身 (.cmd)
+    // 批处理文件内容（简化版，纯 ASCII）
     let batch_content = r#"@echo off
 setlocal enabledelayedexpansion
-
-REM factory-ai-droid-switch Wrapper - 自动加载 API Key
-REM Version: 2
-set "CONFIG_FILE=%USERPROFILE%\.factory\config.json"
-set "FACTORY_API_KEY="
-
-if exist "%CONFIG_FILE%" (
-    for /f "usebackq tokens=*" %%a in (`powershell -NoProfile -Command "(Get-Content '%CONFIG_FILE%' | ConvertFrom-Json).api_key"`) do (
-        set "FACTORY_API_KEY=%%a"
-    )
-)
-
-REM 查找 droid.exe（只匹配 .exe 文件，避免递归调用 .cmd）
-for /f "tokens=*" %%i in ('where droid 2^>nul') do (
-    if /i "%%~xi"==".exe" (
-        "%%i" %*
-        exit /b !errorlevel!
-    )
-)
-echo 找不到 droid.exe，请确保已正确安装 Factory CLI
+set "CF=%USERPROFILE%\.factory\config.json"
+if exist "%CF%" for /f "delims=" %%a in ('powershell -NoProfile -Command "(gc '%CF%'|ConvertFrom-Json).api_key" 2^>nul') do set "FACTORY_API_KEY=%%a"
+for /f "delims=" %%i in ('where droid 2^>nul') do if /i "%%~xi"==".exe" "%%i" %* & exit /b !errorlevel!
+echo droid.exe not found
 exit /b 1
 "#;
-
-    let current_version = "REM Version: 2";
 
     // 确保目录存在
     std::fs::create_dir_all(&bin_dir)
         .map_err(|e| format!("创建 bin 目录失败: {}", e))?;
 
-    // 检查是否已存在且是最新版本
+    // 检查是否需要更新（简单比较内容）
     if cmd_wrapper.exists() {
         let existing = std::fs::read_to_string(&cmd_wrapper).unwrap_or_default();
-        if existing.contains("factory-ai-droid-switch Wrapper") {
-            if existing.contains(current_version) {
-                log::info!("CMD 批处理文件已是最新版本");
-                return Ok(());
-            }
-            // 旧版本存在，需要更新
-            log::info!("检测到旧版本 CMD wrapper，正在更新...");
+        // 检查是否包含新版本的关键特征（使用 CF 变量和单行 for 语句）
+        if existing.contains("set \"CF=%USERPROFILE%") && existing.contains("& exit /b") {
+            log::info!("CMD 批处理文件已是最新版本");
+            return Ok(());
         }
+        log::info!("检测到旧版本 CMD wrapper，正在更新...");
     }
 
-    // 写入批处理文件
-    std::fs::write(&cmd_wrapper, batch_content)
+    // 写入批处理文件（确保使用 Windows CRLF 行尾符）
+    let batch_content_crlf = batch_content.replace('\n', "\r\n");
+    std::fs::write(&cmd_wrapper, batch_content_crlf)
         .map_err(|e| format!("写入 CMD 批处理文件失败: {}", e))?;
 
     log::info!("已安装 CMD 批处理文件到: {}", cmd_wrapper.display());
