@@ -179,4 +179,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
+## Community
+
+欢迎加入微信群交流 AI Vibe Coding！
+
+<p align="center">
+  <img src=".github/images/weixin/weixin.jpg" alt="WeChat Group QR Code" width="300">
+  <br>
+  <em>扫码加入 AI 编辑器技术讨论群</em>
+</p>
+
+---
+
 <p align="center">Made with ❤️ by <a href="https://github.com/zhiNians">zhiNian</a></p>

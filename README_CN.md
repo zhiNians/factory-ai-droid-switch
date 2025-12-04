@@ -192,4 +192,16 @@ factory-ai-droid-switch/
 
 ---
 
+## 社区交流
+
+欢迎加入微信群交流 AI Vibe Coding！
+
+<p align="center">
+  <img src=".github/images/weixin/weixin.jpg" alt="微信群二维码" width="300">
+  <br>
+  <em>扫码加入 AI 编辑器技术讨论群</em>
+</p>
+
+---
+
 <p align="center">用 ❤️ 制作 by <a href="https://github.com/zhiNians">zhiNian</a></p>
