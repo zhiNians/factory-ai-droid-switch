@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { Settings, Trash2, Plus } from 'lucide-react';
+import { Bot, Trash2, Plus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ReasoningLevel } from '../types/api';
 import { useModels } from '../hooks/useModels';
@@ -174,7 +174,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange }) =
         value={displayModelId || ""} 
         onValueChange={handleSelectModel}
       >
-        <SelectTrigger className="w-[200px] bg-black/5 dark:bg-white/5 border-transparent hover:border-black/5 dark:hover:border-white/5 shadow-none">
+        <SelectTrigger className="w-[200px] bg-black/5 dark:bg-white/5 border-transparent hover:border-black/5 dark:hover:border-white/5 shadow-none [&>span]:min-w-0 [&>span]:truncate">
           <SelectValue placeholder="选择模型" />
         </SelectTrigger>
         <SelectContent>
@@ -238,7 +238,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange }) =
       <Dialog open={isManageOpen} onOpenChange={setIsManageOpen}>
         <DialogTrigger asChild>
           <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-black/5 dark:hover:bg-white/10">
-            <Settings className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+            <Bot className="w-4 h-4 text-gray-500 dark:text-gray-400" />
           </Button>
         </DialogTrigger>
         <DialogContent className="max-w-2xl h-[85vh] flex flex-col p-0 gap-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden !rounded-3xl">

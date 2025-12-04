@@ -33,6 +33,14 @@ struct StandardUsage {
 pub fn set_factory_api_key_env(api_key: &str) -> Result<(), String> {
     // 写入配置文件
     set_factory_config_api_key(api_key)?;
+
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: 同时写入注册表环境变量（持久化，但需重启生效）
+        if let Err(e) = set_registry_env_var("FACTORY_API_KEY", api_key) {
+            log::warn!("写入注册表环境变量失败: {}", e);
+        }
+    }
     
     // 安装 shell 包装函数（如果尚未安装）
     if let Err(e) = install_shell_wrapper() {
@@ -42,11 +50,55 @@ pub fn set_factory_api_key_env(api_key: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Windows: 设置用户级环境变量（写入注册表）
+#[cfg(target_os = "windows")]
+fn set_registry_env_var(name: &str, value: &str) -> Result<(), String> {
+    use std::process::Command;
+    
+    let set_cmd = if value.is_empty() {
+        format!(
+            "[Environment]::SetEnvironmentVariable('{}', $null, 'User')",
+            name
+        )
+    } else {
+        format!(
+            "[Environment]::SetEnvironmentVariable('{}', '{}', 'User')",
+            name, value.replace("'", "''")
+        )
+    };
+    
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &set_cmd])
+        .output()
+        .map_err(|e| format!("执行 PowerShell 失败: {}", e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("设置环境变量失败: {}", stderr));
+    }
+    
+    // 广播变更
+    broadcast_environment_change();
+    
+    Ok(())
+}
+
 /// 清除 Factory API Key（从 ~/.factory/config.json 移除）
 /// 
-/// 只更新配置文件，不清除系统环境变量。
+/// 同时会清除 Windows 注册表中的环境变量（如果存在）
 pub fn clear_factory_api_key_env() -> Result<(), String> {
-    clear_factory_config_api_key()
+    clear_factory_config_api_key()?;
+
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: 清除注册表环境变量
+        // 传入空字符串会被 set_registry_env_var 设置为空，相当于删除
+        if let Err(e) = set_registry_env_var("FACTORY_API_KEY", "") {
+            log::warn!("清除注册表环境变量失败: {}", e);
+        }
+    }
+
+    Ok(())
 }
 
 /// 获取 ~/.factory/config.json 的路径
@@ -245,69 +297,89 @@ fn install_windows_wrapper() -> Result<(), String> {
 fn install_powershell_wrapper() -> Result<(), String> {
     let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
     
-    // PowerShell profile 路径
-    let ps_profile = home
-        .join("Documents")
-        .join("WindowsPowerShell")
-        .join("Microsoft.PowerShell_profile.ps1");
+    // 支持 Windows PowerShell 和 PowerShell Core
+    let profile_paths = vec![
+        home.join("Documents").join("WindowsPowerShell").join("Microsoft.PowerShell_profile.ps1"),
+        home.join("Documents").join("PowerShell").join("Microsoft.PowerShell_profile.ps1"),
+    ];
 
     let powershell_function = r#"
 # factory-ai-droid-switch Wrapper Start
-# Version: 4
+# Version: 6
 function droid {
     $configPath = "$env:USERPROFILE\.factory\config.json"
     if (Test-Path $configPath) {
         try {
             $config = Get-Content $configPath -Raw | ConvertFrom-Json
-            if ($config.api_key) { $env:FACTORY_API_KEY = $config.api_key }
+            if ($config.api_key) { $env:FACTORY_API_KEY = $config.api_key } else { $env:FACTORY_API_KEY = $null }
         } catch { }
     }
-    $droidExe = Get-Command droid -All -ErrorAction SilentlyContinue | Where-Object { $_.CommandType -eq 'Application' -and $_.Extension -ieq '.exe' } | Select-Object -First 1
-    if ($droidExe) { & $droidExe.Source @args }
-    else { Write-Error "droid.exe not found. Please install Factory CLI first." }
+    # 查找真实的 droid 命令，排除 .factory 目录下的 wrapper，并支持 .exe/.cmd/.bat
+    $droidCmd = Get-Command droid -All -ErrorAction SilentlyContinue | Where-Object { 
+        $_.CommandType -eq 'Application' -and 
+        ($_.Extension -ieq '.exe' -or $_.Extension -ieq '.cmd' -or $_.Extension -ieq '.bat') -and 
+        $_.Source -notlike "*\.factory\*" 
+    } | Select-Object -First 1
+
+    if ($droidCmd) { & $droidCmd.Source @args }
+    else { Write-Error "droid command not found (checked .exe, .cmd, .bat). Please install Factory CLI first." }
 }
 # factory-ai-droid-switch Wrapper End"#;
 
     let marker_start = "# factory-ai-droid-switch Wrapper Start";
     let marker_end = "# factory-ai-droid-switch Wrapper End";
-    let current_version = "# Version: 4";
+    let current_version = "# Version: 6";
 
-    // 确保目录存在
-    if let Some(parent) = ps_profile.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("创建 PowerShell profile 目录失败: {}", e))?;
-    }
-
-    // 读取现有内容或创建空内容
-    let content = if ps_profile.exists() {
-        std::fs::read_to_string(&ps_profile)
-            .map_err(|e| format!("读取 PowerShell profile 失败: {}", e))?
-    } else {
-        String::new()
-    };
-
-    // 检查是否已安装且是最新版本
-    if content.contains(marker_start) {
-        if content.contains(current_version) {
-            log::info!("PowerShell 包装函数已是最新版本");
-            return Ok(());
+    for ps_profile in profile_paths {
+        // 确保父目录存在（如果 Documents 存在）
+        if let Some(parent) = ps_profile.parent() {
+            if let Some(docs) = parent.parent() {
+                if !docs.exists() { continue; }
+            }
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                log::warn!("创建目录失败 {}: {}", parent.display(), e);
+                continue;
+            }
         }
-        // 旧版本存在，需要更新：移除旧的 wrapper
-        log::info!("检测到旧版本 wrapper，正在更新...");
-        let new_content = remove_wrapper_block(&content, marker_start, marker_end);
-        let new_content = format!("{}\n{}\n", new_content.trim_end(), powershell_function);
-        std::fs::write(&ps_profile, new_content)
-            .map_err(|e| format!("更新 PowerShell profile 失败: {}", e))?;
-        log::info!("已更新 PowerShell 包装函数");
-        return Ok(());
+
+        // 读取现有内容或创建空内容
+        let content = if ps_profile.exists() {
+            match std::fs::read_to_string(&ps_profile) {
+                Ok(c) => c,
+                Err(e) => {
+                    log::warn!("读取 {} 失败: {}", ps_profile.display(), e);
+                    continue;
+                }
+            }
+        } else {
+            String::new()
+        };
+
+        // 检查是否已安装且是最新版本
+        if content.contains(marker_start) {
+            if content.contains(current_version) {
+                log::info!("PowerShell 包装函数已是最新版本: {}", ps_profile.display());
+                continue;
+            }
+            // 旧版本存在，需要更新
+            log::info!("检测到旧版本 wrapper，正在更新: {}", ps_profile.display());
+            let new_content = remove_wrapper_block(&content, marker_start, marker_end);
+            let new_content = format!("{}\n{}\n", new_content.trim_end(), powershell_function);
+            if let Err(e) = std::fs::write(&ps_profile, new_content) {
+                log::warn!("更新 {} 失败: {}", ps_profile.display(), e);
+            }
+            continue;
+        }
+
+        // 添加函数
+        let new_content = format!("{}\n{}\n", content.trim_end(), powershell_function);
+        if let Err(e) = std::fs::write(&ps_profile, new_content) {
+             log::warn!("写入 {} 失败: {}", ps_profile.display(), e);
+        } else {
+             log::info!("已安装 PowerShell 包装函数到: {}", ps_profile.display());
+        }
     }
 
-    // 添加函数
-    let new_content = format!("{}\n{}\n", content.trim_end(), powershell_function);
-    std::fs::write(&ps_profile, new_content)
-        .map_err(|e| format!("写入 PowerShell profile 失败: {}", e))?;
-
-    log::info!("已安装 PowerShell 包装函数到: {}", ps_profile.display());
     Ok(())
 }
 
@@ -320,20 +392,21 @@ fn install_cmd_wrapper() -> Result<(), String> {
     let bin_dir = home.join(".factory").join("bin");
     let cmd_wrapper = bin_dir.join("droid.cmd");
     
-    // CMD wrapper: use temp file to avoid quote issues, use PowerShell to find droid.exe
+    // CMD wrapper: use PowerShell to find droid.exe/cmd/bat and read config
     let batch_content = r#"@echo off
-setlocal enabledelayedexpansion
+setlocal
 set "CF=%USERPROFILE%\.factory\config.json"
 set "FACTORY_API_KEY="
 if exist "%CF%" (
-    set "TK=%TEMP%\droid_key_%RANDOM%.txt"
-    powershell -NoProfile -Command "$k=(gc '%CF%'|ConvertFrom-Json).api_key;if($k){$k|Out-File '%TK%' -Encoding ASCII -NoNewline}" >nul 2>&1
-    if exist "!TK!" (set /p FACTORY_API_KEY=<"!TK!"& del "!TK!" >nul 2>&1)
+    for /f "usebackq delims=" %%k in (`powershell -NoProfile -Command "try{$c=Get-Content '%CF%' -Raw|ConvertFrom-Json;if($c.api_key){Write-Output $c.api_key}}catch{}"`) do set "FACTORY_API_KEY=%%k"
 )
 set "DROID_EXE="
-for /f "delims=" %%e in ('powershell -NoProfile -Command "$env:Path-split';'|%%{$x=Join-Path $_ 'droid.exe';if(Test-Path $x){$x;break}}"') do set "DROID_EXE=%%e"
-if defined DROID_EXE ("%DROID_EXE%" %*& exit /b !errorlevel!)
-echo droid.exe not found
+for /f "delims=" %%e in ('powershell -NoProfile -Command "$E='.exe','.cmd','.bat';$P=$env:Path-split';';foreach($d in $P){if($d-like'*\.factory\*'){continue};foreach($x in $E){$f=Join-Path $d ('droid'+$x);if(Test-Path $f){$f;exit}}}"') do set "DROID_EXE=%%e"
+if defined DROID_EXE (
+    "%DROID_EXE%" %*
+    exit /b %errorlevel%
+)
+echo droid command not found (checked .exe, .cmd, .bat)
 exit /b 1
 "#;
 
@@ -341,10 +414,10 @@ exit /b 1
     std::fs::create_dir_all(&bin_dir)
         .map_err(|e| format!("创建 bin 目录失败: {}", e))?;
 
-    // 检查是否需要更新（检查新版本特征：临时文件方式 + PowerShell 查找）
+    // 检查是否需要更新（检查新版本特征：usebackq）
     if cmd_wrapper.exists() {
         let existing = std::fs::read_to_string(&cmd_wrapper).unwrap_or_default();
-        if existing.contains("droid_key_%RANDOM%") && existing.contains("Path-split") {
+        if existing.contains("usebackq") {
             log::info!("CMD 批处理文件已是最新版本");
             return Ok(());
         }
