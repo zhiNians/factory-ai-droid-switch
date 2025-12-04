@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Particles, { initParticlesEngine } from "@tsparticles/react";
 import { loadSlim } from "@tsparticles/slim";
 import { loadTextShape } from "@tsparticles/shape-text";
-import type { ISourceOptions, MoveDirection, OutMode } from "@tsparticles/engine";
+import type { ISourceOptions } from "@tsparticles/engine";
 import { useBackground } from '../../contexts/BackgroundContext';
 
 export const DynamicBackground = () => {

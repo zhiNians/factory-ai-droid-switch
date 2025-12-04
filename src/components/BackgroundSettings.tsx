@@ -1,4 +1,3 @@
-import React from 'react';
 import { Monitor, Zap, Grid, Box, Wand2, Gauge, Sparkles, Snowflake, CloudRain } from 'lucide-react';
 import { useBackground, BackgroundType, BackgroundTheme, BackgroundDensity, BackgroundSpeed } from '../contexts/BackgroundContext';
 import { Label } from './ui/label';
