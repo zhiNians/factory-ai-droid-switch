@@ -119,6 +119,28 @@ fn clear_factory_config_api_key() -> Result<(), String> {
     Ok(())
 }
 
+/// 从文本中移除指定标记之间的内容（包括标记行）
+fn remove_wrapper_block(content: &str, marker_start: &str, marker_end: &str) -> String {
+    let mut result = Vec::new();
+    let mut in_block = false;
+    
+    for line in content.lines() {
+        if line.contains(marker_start) {
+            in_block = true;
+            continue;
+        }
+        if line.contains(marker_end) {
+            in_block = false;
+            continue;
+        }
+        if !in_block {
+            result.push(line);
+        }
+    }
+    
+    result.join("\n")
+}
+
 /// 安装 shell 包装函数
 /// 
 /// 在 shell 配置文件中添加 droid 函数，每次执行时自动从 config.json 读取 api_key
@@ -142,6 +164,7 @@ fn install_unix_wrapper() -> Result<(), String> {
     let shell_function = r#"
 # factory-ai-droid-switch Wrapper Start
 # 此函数由 factory-ai-droid-switch 自动生成，用于动态加载 API Key
+# Version: 2
 droid() {
     local api_key=""
     local config_file="$HOME/.factory/config.json"
@@ -157,6 +180,8 @@ droid() {
 # factory-ai-droid-switch Wrapper End"#;
 
     let marker_start = "# factory-ai-droid-switch Wrapper Start";
+    let marker_end = "# factory-ai-droid-switch Wrapper End";
+    let current_version = "# Version: 2";
 
     let shell_configs = vec![
         home.join(".zshrc"),
@@ -167,9 +192,19 @@ droid() {
         if config_path.exists() {
             match std::fs::read_to_string(&config_path) {
                 Ok(content) => {
-                    // 检查是否已安装
+                    // 检查是否已安装且是最新版本
                     if content.contains(marker_start) {
-                        log::info!("shell 包装函数已存在于: {}", config_path.display());
+                        if content.contains(current_version) {
+                            log::info!("shell 包装函数已是最新版本: {}", config_path.display());
+                            continue;
+                        }
+                        // 旧版本存在，需要更新
+                        log::info!("检测到旧版本 wrapper，正在更新: {}", config_path.display());
+                        let new_content = remove_wrapper_block(&content, marker_start, marker_end);
+                        let new_content = format!("{}\n{}\n", new_content.trim_end(), shell_function);
+                        std::fs::write(&config_path, &new_content)
+                            .map_err(|e| format!("更新 {} 失败: {}", config_path.display(), e))?;
+                        log::info!("已更新 shell 包装函数: {}", config_path.display());
                         continue;
                     }
 
@@ -220,6 +255,7 @@ fn install_powershell_wrapper() -> Result<(), String> {
     let powershell_function = r#"
 # factory-ai-droid-switch Wrapper Start
 # 此函数由 factory-ai-droid-switch 自动生成，用于动态加载 API Key
+# Version: 2
 function droid {
     $configPath = "$env:USERPROFILE\.factory\config.json"
     if (Test-Path $configPath) {
@@ -232,11 +268,19 @@ function droid {
             # 忽略解析错误
         }
     }
-    & "$env:USERPROFILE\.factory\bin\droid.exe" @args
+    # 查找原始的 droid.exe（只匹配 .exe 文件，排除 .cmd/.bat）
+    $droidExe = Get-Command droid -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.exe' } | Select-Object -First 1
+    if ($droidExe) {
+        & $droidExe.Source @args
+    } else {
+        Write-Error "找不到 droid.exe，请确保已正确安装 Factory CLI"
+    }
 }
 # factory-ai-droid-switch Wrapper End"#;
 
     let marker_start = "# factory-ai-droid-switch Wrapper Start";
+    let marker_end = "# factory-ai-droid-switch Wrapper End";
+    let current_version = "# Version: 2";
 
     // 确保目录存在
     if let Some(parent) = ps_profile.parent() {
@@ -252,9 +296,19 @@ function droid {
         String::new()
     };
 
-    // 检查是否已安装
+    // 检查是否已安装且是最新版本
     if content.contains(marker_start) {
-        log::info!("PowerShell 包装函数已存在");
+        if content.contains(current_version) {
+            log::info!("PowerShell 包装函数已是最新版本");
+            return Ok(());
+        }
+        // 旧版本存在，需要更新：移除旧的 wrapper
+        log::info!("检测到旧版本 wrapper，正在更新...");
+        let new_content = remove_wrapper_block(&content, marker_start, marker_end);
+        let new_content = format!("{}\n{}\n", new_content.trim_end(), powershell_function);
+        std::fs::write(&ps_profile, new_content)
+            .map_err(|e| format!("更新 PowerShell profile 失败: {}", e))?;
+        log::info!("已更新 PowerShell 包装函数");
         return Ok(());
     }
 
@@ -268,9 +322,6 @@ function droid {
 }
 
 /// Windows: 安装 CMD 批处理文件
-/// 
-/// 创建 droid.cmd 文件到 ~/.factory/bin/ 目录
-/// 用户需要确保该目录在 PATH 中且优先级高于原 droid.exe
 #[cfg(target_os = "windows")]
 fn install_cmd_wrapper() -> Result<(), String> {
     let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
@@ -281,10 +332,12 @@ fn install_cmd_wrapper() -> Result<(), String> {
     
     // 批处理文件内容
     // 使用 PowerShell 来解析 JSON（CMD 原生不支持 JSON 解析）
+    // 通过检查扩展名为 .exe 来避免递归调用自身 (.cmd)
     let batch_content = r#"@echo off
 setlocal enabledelayedexpansion
 
 REM factory-ai-droid-switch Wrapper - 自动加载 API Key
+REM Version: 2
 set "CONFIG_FILE=%USERPROFILE%\.factory\config.json"
 set "FACTORY_API_KEY="
 
@@ -294,20 +347,33 @@ if exist "%CONFIG_FILE%" (
     )
 )
 
-REM 调用真正的 droid.exe
-"%USERPROFILE%\.factory\bin\droid.exe" %*
+REM 查找 droid.exe（只匹配 .exe 文件，避免递归调用 .cmd）
+for /f "tokens=*" %%i in ('where droid 2^>nul') do (
+    if /i "%%~xi"==".exe" (
+        "%%i" %*
+        exit /b !errorlevel!
+    )
+)
+echo 找不到 droid.exe，请确保已正确安装 Factory CLI
+exit /b 1
 "#;
+
+    let current_version = "REM Version: 2";
 
     // 确保目录存在
     std::fs::create_dir_all(&bin_dir)
         .map_err(|e| format!("创建 bin 目录失败: {}", e))?;
 
-    // 检查是否已存在
+    // 检查是否已存在且是最新版本
     if cmd_wrapper.exists() {
         let existing = std::fs::read_to_string(&cmd_wrapper).unwrap_or_default();
         if existing.contains("factory-ai-droid-switch Wrapper") {
-            log::info!("CMD 批处理文件已存在");
-            return Ok(());
+            if existing.contains(current_version) {
+                log::info!("CMD 批处理文件已是最新版本");
+                return Ok(());
+            }
+            // 旧版本存在，需要更新
+            log::info!("检测到旧版本 CMD wrapper，正在更新...");
         }
     }
 
@@ -316,8 +382,90 @@ REM 调用真正的 droid.exe
         .map_err(|e| format!("写入 CMD 批处理文件失败: {}", e))?;
 
     log::info!("已安装 CMD 批处理文件到: {}", cmd_wrapper.display());
-    log::info!("注意: 请确保 %USERPROFILE%\\.factory\\bin 在 PATH 中且优先级高于原 droid.exe 位置");
+    
+    // 自动将 bin 目录添加到用户 PATH（优先级最高）
+    if let Err(e) = add_to_user_path(&bin_dir) {
+        log::warn!("自动添加 PATH 失败: {}，请手动添加", e);
+    }
+    
     Ok(())
+}
+
+/// Windows: 将目录添加到用户 PATH 环境变量（放在最前面确保优先级最高）
+#[cfg(target_os = "windows")]
+fn add_to_user_path(dir: &std::path::Path) -> Result<(), String> {
+    use std::process::Command;
+    
+    let dir_str = dir.to_string_lossy().to_string();
+    
+    // 使用 PowerShell 读取当前用户 PATH
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", 
+            "[Environment]::GetEnvironmentVariable('Path', 'User')"])
+        .output()
+        .map_err(|e| format!("执行 PowerShell 失败: {}", e))?;
+    
+    let current_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    
+    // 检查是否已经在 PATH 中
+    let path_lower = current_path.to_lowercase();
+    let dir_lower = dir_str.to_lowercase();
+    
+    // 检查各种可能的格式
+    let already_exists = path_lower.split(';')
+        .any(|p| {
+            let p = p.trim();
+            p == dir_lower || 
+            p == dir_lower.replace('/', "\\") ||
+            p.replace("%userprofile%", &std::env::var("USERPROFILE").unwrap_or_default().to_lowercase()) == dir_lower
+        });
+    
+    if already_exists {
+        log::info!("PATH 中已包含 {}", dir_str);
+        return Ok(());
+    }
+    
+    // 将新目录添加到 PATH 最前面（确保优先级最高）
+    let new_path = if current_path.is_empty() {
+        dir_str.clone()
+    } else {
+        format!("{};{}", dir_str, current_path)
+    };
+    
+    // 使用 PowerShell 设置用户 PATH
+    let set_cmd = format!(
+        "[Environment]::SetEnvironmentVariable('Path', '{}', 'User')",
+        new_path.replace("'", "''")
+    );
+    
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &set_cmd])
+        .output()
+        .map_err(|e| format!("设置 PATH 失败: {}", e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("设置 PATH 失败: {}", stderr));
+    }
+    
+    log::info!("已将 {} 添加到用户 PATH（需要重启 CMD 生效）", dir_str);
+    
+    // 广播环境变量变更消息，让部分应用立即感知（CMD 可能仍需重启）
+    broadcast_environment_change();
+    
+    Ok(())
+}
+
+/// Windows: 广播环境变量变更消息
+#[cfg(target_os = "windows")]
+fn broadcast_environment_change() {
+    use std::process::Command;
+    
+    // 使用 PowerShell 发送 WM_SETTINGCHANGE 消息
+    let _ = Command::new("powershell")
+        .args(["-NoProfile", "-Command", 
+            "Add-Type -Namespace Win32 -Name NativeMethods -MemberDefinition '[DllImport(\"user32.dll\", SetLastError = true, CharSet = CharSet.Auto)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'; $HWND_BROADCAST = [IntPtr]0xffff; $WM_SETTINGCHANGE = 0x1a; $result = [UIntPtr]::Zero; [Win32.NativeMethods]::SendMessageTimeout($HWND_BROADCAST, $WM_SETTINGCHANGE, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)"])
+        .output();
 }
 
 /// 获取当前配置文件中的 Factory API Key

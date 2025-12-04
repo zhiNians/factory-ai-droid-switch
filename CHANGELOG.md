@@ -35,6 +35,10 @@
 
 ### 修复
 - 修复模型和推理级别切换后不生效的问题（React 状态更新时序问题）
+- **[严重]** 修复 Windows 上 PowerShell/CMD wrapper 硬编码 droid.exe 路径导致命令失效的问题
+- PowerShell wrapper 现在只匹配 .exe 文件，避免找到 .cmd 导致递归
+- 添加 wrapper 版本控制，旧版本会自动更新为新版本
+- Windows CMD 现在自动将 `%USERPROFILE%\.factory\bin` 添加到用户 PATH（无需手动配置）
 
 ## [0.1.0] - 2024-12-01
 

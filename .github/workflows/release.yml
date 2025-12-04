@@ -4,6 +4,18 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: '选择构建平台'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - macos-arm64
+          - macos-x64
+          - windows
 
 jobs:
   release:
@@ -15,12 +27,19 @@ jobs:
         include:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
+            id: 'macos-arm64'
           - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
+            id: 'macos-x64'
           - platform: 'windows-latest'
             args: ''
+            id: 'windows'
 
     runs-on: ${{ matrix.platform }}
+    if: >-
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == matrix.id
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

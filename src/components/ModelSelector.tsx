@@ -122,7 +122,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange }) =
       await loadModels();
       setPendingModelId(null);
       setPendingReasoningLevel(null);
-      // Use sonner toast here if installed, or just callback
       onModelChange?.(modelToApply);
     } catch (err: any) {
       console.error(err);
