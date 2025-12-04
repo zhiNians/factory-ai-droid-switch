@@ -109,12 +109,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ onModelChange }) =
     try {
       setApplying(true);
 
+      // 先切换模型（如果需要）
       if (pendingModelId && pendingModelId !== selectedModelId) {
         await selectModel(pendingModelId);
       }
 
-      const currentModel = models.find(m => m.id === modelToApply);
-      if (pendingReasoningLevel && currentModel && pendingReasoningLevel !== currentModel.reasoningLevel) {
+      // 如果有待应用的推理级别，始终调用设置（后端会处理是否真正需要更新）
+      if (pendingReasoningLevel) {
         await setReasoningLevel(modelToApply, pendingReasoningLevel);
       }
 
