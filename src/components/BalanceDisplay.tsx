@@ -38,10 +38,48 @@ export const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
     return "text-green-600 dark:text-green-400";
   };
 
+  // 加载中状态（骨架屏）
+  if (isLoading) {
+    return (
+      <div className="mt-2 p-3 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl space-y-3 backdrop-blur-sm animate-pulse min-h-[190px] flex flex-col justify-between">
+        <div>
+          {/* 标题行骨架 */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="h-4 w-16 bg-gray-300 dark:bg-white/10 rounded"></div>
+            <div className="h-4 w-4 bg-gray-300 dark:bg-white/10 rounded"></div>
+          </div>
+          
+          {/* 进度条骨架 */}
+          <div className="space-y-1 mb-3">
+            <div className="flex justify-between">
+              <div className="h-3 w-8 bg-gray-300 dark:bg-white/10 rounded"></div>
+              <div className="h-3 w-12 bg-gray-300 dark:bg-white/10 rounded"></div>
+            </div>
+            <div className="h-1.5 w-full bg-gray-300 dark:bg-white/10 rounded-full"></div>
+          </div>
+
+          {/* 详细信息骨架 */}
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/5 dark:border-white/5">
+            <div className="h-3 w-20 bg-gray-300 dark:bg-white/10 rounded"></div>
+            <div className="h-3 w-20 bg-gray-300 dark:bg-white/10 rounded"></div>
+          </div>
+        </div>
+        
+        <div>
+          {/* 到期时间骨架 */}
+          <div className="h-3 w-32 bg-gray-300 dark:bg-white/10 rounded mb-1"></div>
+
+          {/* 底部时间骨架 */}
+          <div className="h-3 w-24 bg-gray-300 dark:bg-white/10 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
   // 错误状态
   if (error) {
     return (
-      <div className="mt-2 p-3 bg-red-500/10 dark:bg-red-900/20 border border-red-500/20 rounded-xl backdrop-blur-sm">
+      <div className="mt-2 p-3 bg-red-500/10 dark:bg-red-900/20 border border-red-500/20 rounded-xl backdrop-blur-sm min-h-[190px] flex flex-col justify-center">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-red-600 dark:text-red-400 text-sm">
             <AlertTriangle size={16} />
@@ -68,7 +106,7 @@ export const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
   // 未查询状态
   if (!balance) {
     return (
-      <div className="mt-2 p-3 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl backdrop-blur-sm">
+      <div className="mt-2 p-3 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl backdrop-blur-sm min-h-[190px] flex flex-col justify-center">
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600 dark:text-gray-400">
             暂无余额信息
@@ -95,7 +133,7 @@ export const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
   const exceeded = balance.exceeded;
 
   return (
-    <div className="mt-2 p-3 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl space-y-3 backdrop-blur-sm">
+    <div className="mt-2 p-3 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-xl space-y-3 backdrop-blur-sm min-h-[190px] flex flex-col">
       {/* 标题行 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -136,7 +174,7 @@ export const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
             {percentUsed.toFixed(1)}%
           </span>
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            剩余 {formatM(balance.remaining)}
+            剩余 {formatM(balance.remaining)} ({Math.max(0, 100 - percentUsed).toFixed(1)}%)
           </span>
         </div>
         <div className="w-full bg-black/5 dark:bg-white/10 rounded-full h-1.5 overflow-hidden">
@@ -159,29 +197,31 @@ export const BalanceDisplay: React.FC<BalanceDisplayProps> = ({
         </div>
       </div>
 
+      {/* 底部信息区 (自动推到底部) */}
+      <div className="mt-auto space-y-1">
+        {/* 到期时间 */}
+        {balance.expiryDate && (
+          <div className="text-xs">
+            <span className="text-gray-500 dark:text-gray-400">到期时间: </span>
+            <span className="font-medium text-gray-700 dark:text-gray-300">{formatDateTime(balance.expiryDate)}</span>
+          </div>
+        )}
 
-      {/* 到期时间 */}
-      {balance.expiryDate && (
-        <div className="text-xs">
-          <span className="text-gray-500 dark:text-gray-400">到期时间: </span>
-          <span className="font-medium text-gray-700 dark:text-gray-300">{formatDateTime(balance.expiryDate)}</span>
-        </div>
-      )}
+        {/* 超额信息 */}
+        {exceeded && balance.overage > 0 && (
+          <div className="text-xs text-red-600 dark:text-red-400">
+            <span className="font-medium">超额使用: </span>
+            {balance.overage.toLocaleString()} tokens
+          </div>
+        )}
 
-      {/* 超额信息 */}
-      {exceeded && balance.overage > 0 && (
-        <div className="text-xs text-red-600 dark:text-red-400">
-          <span className="font-medium">超额使用: </span>
-          {balance.overage.toLocaleString()} tokens
-        </div>
-      )}
-
-      {/* 最后更新时间 */}
-      {lastChecked && (
-        <div className="text-xs text-gray-400 dark:text-gray-500">
-          最后更新: {formatRelativeTime(lastChecked)}
-        </div>
-      )}
+        {/* 最后更新时间 */}
+        {lastChecked && (
+          <div className="text-xs text-gray-400 dark:text-gray-500">
+            最后更新: {formatRelativeTime(lastChecked)}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

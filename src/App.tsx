@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Plus, Upload, Box } from 'lucide-react';
+import { Plus, Upload, Box, Settings } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ProviderList } from './components/ProviderList';
 import { AddProviderForm } from './components/AddProviderForm';
@@ -11,13 +11,16 @@ import { BatchImport } from './components/BatchImport';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ModelSelector } from './components/ModelSelector';
 import { ThemeToggle } from './components/ui/ThemeToggle';
-import { StarryBackground } from './components/ui/StarryBackground';
+import { DynamicBackground } from './components/ui/DynamicBackground';
+import { BackgroundSettings } from './components/BackgroundSettings';
+import { BackgroundProvider } from './contexts/BackgroundContext';
 import { useProviders } from './hooks/useProviders';
 import { useModal } from './hooks/useModal';
 
 // Shadcn UI
 import { Button } from "./components/ui/button";
 import { Card } from "./components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "./components/ui/dialog";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import {
@@ -41,6 +44,7 @@ function App() {
 
   const addModal = useModal();
   const batchModal = useModal();
+  const settingsModal = useModal();
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -107,135 +111,162 @@ function App() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="h-screen w-full bg-transparent transition-colors duration-500 flex overflow-hidden font-sans text-gray-900 dark:text-gray-100 selection:bg-blue-500/30 selection:text-white">
-        {/* Dynamic Background */}
-        <StarryBackground />
-        {/* Removed old background elements as they are integrated in StarryBackground */}
+      <BackgroundProvider>
+                <div className="h-screen w-full bg-transparent transition-colors duration-500 flex overflow-hidden font-sans text-gray-900 dark:text-gray-100 selection:bg-blue-500/30 selection:text-white">
+                  {/* Dynamic Background */}
+                  <DynamicBackground />
+                  
+                  <Toaster />
         
-        <Toaster />
-
-        {/* Sidebar */}
-        <motion.div 
-          initial={{ x: -50, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          className="w-20 lg:w-64 p-4 flex flex-col shrink-0 z-20 relative"
-        >
-          <Card className="h-full flex flex-col items-center lg:items-stretch p-4 gap-6 !bg-white/10 dark:!bg-black/10 !backdrop-blur-md !border-white dark:!border-white/20 !shadow-lg opacity-80">
-            <div className="flex items-center justify-center lg:justify-start gap-3 px-2 py-2 shrink-0">
-               <div className="w-10 h-10 min-w-[2.5rem] rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 relative group overflow-hidden">
-                  <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                  <Box className="text-white relative z-10" size={20} />
-               </div>
-               <h1 className="hidden lg:block font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 tracking-tight">
-                  Droid
-               </h1>
-            </div>
-
-            <nav className="flex-1 flex flex-col gap-3 w-full items-center lg:items-stretch">
-               <Tooltip>
-                 <TooltipTrigger asChild>
-                   <div className="w-full flex justify-center lg:block">
-                     <Button 
-                        variant="ghost" 
-                        className="justify-center lg:justify-start gap-3 text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 h-12 w-12 lg:w-full p-0 lg:px-4 group rounded-xl"
-                        onClick={addModal.open}
-                     >
-                        <Plus size={20} className="group-hover:scale-110 transition-transform shrink-0" />
-                        <span className="hidden lg:block font-medium truncate">添加密钥</span>
-                     </Button>
-                   </div>
-                 </TooltipTrigger>
-                 <TooltipContent side="right" className="lg:hidden">
-                   <p>添加密钥</p>
-                 </TooltipContent>
-               </Tooltip>
-               
-               <Tooltip>
-                 <TooltipTrigger asChild>
-                   <div className="w-full flex justify-center lg:block">
-                     <Button 
-                        variant="ghost" 
-                        className="justify-center lg:justify-start gap-3 text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 h-12 w-12 lg:w-full p-0 lg:px-4 group rounded-xl"
-                        onClick={batchModal.open}
-                     >
-                        <Upload size={20} className="group-hover:scale-110 transition-transform shrink-0" />
-                        <span className="hidden lg:block font-medium truncate">批量导入</span>
-                     </Button>
-                   </div>
-                 </TooltipTrigger>
-                 <TooltipContent side="right" className="lg:hidden">
-                   <p>批量导入</p>
-                 </TooltipContent>
-               </Tooltip>
-            </nav>
-
-            <div className="flex justify-center lg:justify-start px-0 lg:px-2 shrink-0 w-full">
-               <ThemeToggle />
-            </div>
-          </Card>
-        </motion.div>
-
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col h-screen p-4 pl-0 gap-4 overflow-hidden">
-          {/* Top Bar */}
-          <Card className="h-28 px-6 flex items-center justify-between shrink-0 z-30 !bg-white/10 dark:!bg-black/10 !backdrop-blur-md !border-white dark:!border-white/20 !shadow-lg relative overflow-visible opacity-80">
-             <div>
-                <h2 className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">密钥管理</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 hidden sm:block">管理您的 API 访问密钥</p>
-             </div>
-             <div className="flex items-center gap-4">
-                 <ModelSelector />
-             </div>
-          </Card>
-
-          {/* Content Area */}
-          <div className="flex-1 relative rounded-3xl overflow-hidden flex flex-col p-1">
-             {loading && providers.length === 0 ? (
-               <div className="h-full flex flex-col items-center justify-center">
-                 <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                 <p className="mt-4 text-gray-500 font-medium">正在加载密钥...</p>
-               </div>
-             ) : (
-               <ProviderList
-                 providers={providers}
-                 activeProviderId={activeProvider?.id}
-                 onSwitch={switchProvider}
-                 onDisable={disableProvider}
-                 onDelete={handleDeleteProvider}
-                 onNotify={(message, type) => {
-                    if (type === 'error') toast.error(message);
-                    else toast.success(message);
-                 }}
-               />
-             )}
-          </div>
-        </div>
-
-        {/* Modals */}
-        {addModal.isOpen && (
-          <AddProviderForm
-            onAdd={handleAddProvider}
-            onClose={addModal.close}
-          />
-        )}
-
-        {batchModal.isOpen && (
-          <BatchImport
-            onImport={handleBatchImport}
-            onClose={batchModal.close}
-          />
-        )}
-
-        {confirmDialog && (
-          <ConfirmDialog
-            isOpen={confirmDialog.isOpen}
-            title={confirmDialog.title}
-            message={confirmDialog.message}
-            onConfirm={confirmDialog.onConfirm}
-            onCancel={() => setConfirmDialog(null)}
-          />
-        )}
-      </div>
+                  {/* Sidebar */}
+                  <motion.div 
+                    initial={{ x: -50, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    className="w-20 lg:w-64 p-4 flex flex-col shrink-0 z-20 relative"
+                  >
+                    <Card className="h-full flex flex-col items-center lg:items-stretch p-4 gap-6 !bg-white/10 dark:!bg-black/10 !backdrop-blur-md !border-white dark:!border-white/20 !shadow-lg opacity-80">
+                      <div className="flex items-center justify-center lg:justify-start gap-3 px-2 py-2 shrink-0">
+                         <div className="w-10 h-10 min-w-[2.5rem] rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 relative group overflow-hidden">
+                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                            <Box className="text-white relative z-10" size={20} />
+                         </div>
+                         <h1 className="hidden lg:block font-bold text-xl bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 tracking-tight">
+                            Droid
+                         </h1>
+                      </div>
+        
+                      <nav className="flex-1 flex flex-col gap-3 w-full items-center lg:items-stretch">
+                         <Tooltip>
+                           <TooltipTrigger asChild>
+                             <div className="w-full flex justify-center lg:block">
+                               <Button 
+                                  variant="ghost" 
+                                  className="justify-center lg:justify-start gap-3 text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 h-12 w-12 lg:w-full p-0 lg:px-4 group rounded-xl"
+                                  onClick={addModal.open}
+                               >
+                                  <Plus size={20} className="group-hover:scale-110 transition-transform shrink-0" />
+                                  <span className="hidden lg:block font-medium truncate">添加密钥</span>
+                               </Button>
+                             </div>
+                           </TooltipTrigger>
+                           <TooltipContent side="right" className="lg:hidden">
+                             <p>添加密钥</p>
+                           </TooltipContent>
+                         </Tooltip>
+                         
+                         <Tooltip>
+                           <TooltipTrigger asChild>
+                             <div className="w-full flex justify-center lg:block">
+                               <Button 
+                                  variant="ghost" 
+                                  className="justify-center lg:justify-start gap-3 text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 h-12 w-12 lg:w-full p-0 lg:px-4 group rounded-xl"
+                                  onClick={batchModal.open}
+                               >
+                                  <Upload size={20} className="group-hover:scale-110 transition-transform shrink-0" />
+                                  <span className="hidden lg:block font-medium truncate">批量导入</span>
+                               </Button>
+                             </div>
+                           </TooltipTrigger>
+                           <TooltipContent side="right" className="lg:hidden">
+                             <p>批量导入</p>
+                           </TooltipContent>
+                         </Tooltip>
+        
+                         <Tooltip>
+                           <TooltipTrigger asChild>
+                             <div className="w-full flex justify-center lg:block">
+                               <Button 
+                                  variant="ghost" 
+                                  className="justify-center lg:justify-start gap-3 text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 h-12 w-12 lg:w-full p-0 lg:px-4 group rounded-xl"
+                                  onClick={settingsModal.open}
+                               >
+                                  <Settings size={20} className="group-hover:rotate-90 transition-transform duration-500 shrink-0" />
+                                  <span className="hidden lg:block font-medium truncate">界面设置</span>
+                               </Button>
+                             </div>
+                           </TooltipTrigger>
+                           <TooltipContent side="right" className="lg:hidden">
+                             <p>界面设置</p>
+                           </TooltipContent>
+                         </Tooltip>
+                      </nav>
+        
+                      <div className="flex justify-center lg:justify-start px-0 lg:px-2 shrink-0 w-full">
+                         <ThemeToggle />
+                      </div>
+                    </Card>
+                  </motion.div>
+        
+                  {/* Main Content */}
+                  <div className="flex-1 flex flex-col h-screen p-4 pl-0 gap-4 overflow-hidden">
+                    {/* Top Bar */}
+                    <Card className="h-28 px-6 flex items-center justify-between shrink-0 z-30 !bg-white/10 dark:!bg-black/10 !backdrop-blur-md !border-white dark:!border-white/20 !shadow-lg relative overflow-visible opacity-80">
+                       <div>
+                          <h2 className="text-2xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-gray-400">密钥管理</h2>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 hidden sm:block">管理您的 API 访问密钥</p>
+                       </div>
+                       <div className="flex items-center gap-4">
+                           <ModelSelector />
+                       </div>
+                    </Card>
+        
+                    {/* Content Area */}
+                    <div className="flex-1 relative rounded-3xl overflow-hidden flex flex-col p-1">
+                       {loading && providers.length === 0 ? (
+                         <div className="h-full flex flex-col items-center justify-center">
+                           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                           <p className="mt-4 text-gray-500 font-medium">正在加载密钥...</p>
+                         </div>
+                       ) : (
+                         <ProviderList
+                           providers={providers}
+                           activeProviderId={activeProvider?.id}
+                           onSwitch={switchProvider}
+                           onDisable={disableProvider}
+                           onDelete={handleDeleteProvider}
+                           onNotify={(message, type) => {
+                              if (type === 'error') toast.error(message);
+                              else toast.success(message);
+                           }}
+                         />
+                       )}
+                    </div>
+                  </div>
+        
+                  {/* Modals */}
+                  {addModal.isOpen && (
+                    <AddProviderForm
+                      onAdd={handleAddProvider}
+                      onClose={addModal.close}
+                    />
+                  )}
+        
+                  {batchModal.isOpen && (
+                    <BatchImport
+                      onImport={handleBatchImport}
+                      onClose={batchModal.close}
+                    />
+                  )}
+        
+                                      <Dialog open={settingsModal.isOpen} onOpenChange={(open) => !open && settingsModal.close()}>
+                                        <DialogContent className="max-w-md max-h-[85vh] flex flex-col !rounded-3xl !p-0 gap-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden">
+                                          <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200/10 dark:border-white/10 shrink-0">
+                                            <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">界面设置</DialogTitle>
+                                          </div>
+                                          <div className="overflow-y-auto flex-1">
+                                            <BackgroundSettings />
+                                          </div>
+                                        </DialogContent>
+                                      </Dialog>                  {confirmDialog && (
+                    <ConfirmDialog
+                      isOpen={confirmDialog.isOpen}
+                      title={confirmDialog.title}
+                      message={confirmDialog.message}
+                      onConfirm={confirmDialog.onConfirm}
+                      onCancel={() => setConfirmDialog(null)}
+                    />
+                  )}
+                </div>      </BackgroundProvider>
     </TooltipProvider>
   );
 }
