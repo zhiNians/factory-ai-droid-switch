@@ -640,3 +640,177 @@ pub async fn batch_check_balances(
 
     Ok(results)
 }
+
+// ==================== 用户级别系统提示词管理 ====================
+
+use crate::models::{PromptConfig, PromptTemplate, get_recommended_prompts};
+
+/// 获取 ~/.factory/AGENTS.md 的路径（跨平台支持）
+fn get_agents_md_path() -> Result<std::path::PathBuf, String> {
+    let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
+    Ok(home.join(".factory").join("AGENTS.md"))
+}
+
+/// 获取提示词配置文件路径
+fn get_prompt_config_path() -> Result<std::path::PathBuf, String> {
+    let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
+    Ok(home.join(".factory").join("prompts.json"))
+}
+
+/// 读取用户级别系统提示词
+pub fn get_user_system_prompt() -> Result<String, String> {
+    let agents_path = get_agents_md_path()?;
+    
+    if !agents_path.exists() {
+        log::info!("~/.factory/AGENTS.md 不存在，返回空内容");
+        return Ok(String::new());
+    }
+
+    std::fs::read_to_string(&agents_path)
+        .map_err(|e| format!("读取 AGENTS.md 失败: {}", e))
+}
+
+/// 保存用户级别系统提示词
+pub fn set_user_system_prompt(content: &str) -> Result<(), String> {
+    let agents_path = get_agents_md_path()?;
+    
+    // 确保 .factory 目录存在
+    if let Some(parent) = agents_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("创建 .factory 目录失败: {}", e))?;
+    }
+
+    std::fs::write(&agents_path, content)
+        .map_err(|e| format!("写入 AGENTS.md 失败: {}", e))?;
+
+    log::info!("已更新 ~/.factory/AGENTS.md");
+    Ok(())
+}
+
+/// 获取 AGENTS.md 文件的完整路径（用于在文件管理器中打开）
+pub fn get_agents_md_file_path() -> Result<String, String> {
+    let agents_path = get_agents_md_path()?;
+    Ok(agents_path.to_string_lossy().to_string())
+}
+
+/// 加载提示词配置
+pub fn load_prompt_config() -> Result<PromptConfig, String> {
+    let config_path = get_prompt_config_path()?;
+    
+    if !config_path.exists() {
+        return Ok(PromptConfig::default());
+    }
+
+    let content = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("读取 prompts.json 失败: {}", e))?;
+    
+    serde_json::from_str(&content)
+        .map_err(|e| format!("解析 prompts.json 失败: {}", e))
+}
+
+/// 保存提示词配置
+pub fn save_prompt_config(config: &PromptConfig) -> Result<(), String> {
+    let config_path = get_prompt_config_path()?;
+    
+    // 确保 .factory 目录存在
+    if let Some(parent) = config_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("创建 .factory 目录失败: {}", e))?;
+    }
+
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("序列化配置失败: {}", e))?;
+    
+    std::fs::write(&config_path, content)
+        .map_err(|e| format!("写入 prompts.json 失败: {}", e))?;
+
+    log::info!("已保存提示词配置");
+    Ok(())
+}
+
+/// 获取所有提示词模板（包括推荐和用户自定义）
+pub fn get_all_prompt_templates() -> Result<Vec<PromptTemplate>, String> {
+    let config = load_prompt_config()?;
+    let mut templates = get_recommended_prompts();
+    
+    // 添加用户自定义模板
+    for template in config.templates {
+        if !template.is_builtin {
+            templates.push(template);
+        }
+    }
+    
+    Ok(templates)
+}
+
+/// 获取推荐提示词列表
+pub fn get_recommended_prompt_templates() -> Vec<PromptTemplate> {
+    get_recommended_prompts()
+}
+
+/// 添加自定义提示词模板
+pub fn add_prompt_template(name: String, content: String, description: Option<String>, category: Option<String>) -> Result<PromptTemplate, String> {
+    let mut config = load_prompt_config()?;
+    
+    let id = format!("custom-{}", chrono::Utc::now().timestamp_millis());
+    let template = PromptTemplate {
+        id: id.clone(),
+        name,
+        content,
+        description,
+        category,
+        is_builtin: false,
+        created_at: Some(chrono::Utc::now().to_rfc3339()),
+    };
+    
+    config.templates.push(template.clone());
+    save_prompt_config(&config)?;
+    
+    Ok(template)
+}
+
+/// 删除自定义提示词模板
+pub fn remove_prompt_template(id: String) -> Result<(), String> {
+    let mut config = load_prompt_config()?;
+    
+    let original_len = config.templates.len();
+    config.templates.retain(|t| t.id != id || t.is_builtin);
+    
+    if config.templates.len() == original_len {
+        return Err("未找到该模板或无法删除内置模板".to_string());
+    }
+    
+    // 如果删除的是当前激活的模板，清除激活状态
+    if config.active_template_id.as_ref() == Some(&id) {
+        config.active_template_id = None;
+    }
+    
+    save_prompt_config(&config)?;
+    Ok(())
+}
+
+/// 应用提示词模板（写入 AGENTS.md 并设置为激活）
+pub fn apply_prompt_template(id: String) -> Result<(), String> {
+    let all_templates = get_all_prompt_templates()?;
+    
+    let template = all_templates.iter()
+        .find(|t| t.id == id)
+        .ok_or_else(|| format!("未找到 ID 为 {} 的模板", id))?;
+    
+    // 写入 AGENTS.md
+    set_user_system_prompt(&template.content)?;
+    
+    // 更新激活状态
+    let mut config = load_prompt_config()?;
+    config.active_template_id = Some(id);
+    save_prompt_config(&config)?;
+    
+    log::info!("已应用模板: {}", template.name);
+    Ok(())
+}
+
+/// 获取当前激活的模板 ID
+pub fn get_active_template_id() -> Result<Option<String>, String> {
+    let config = load_prompt_config()?;
+    Ok(config.active_template_id)
+}

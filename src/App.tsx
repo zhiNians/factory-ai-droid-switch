@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Plus, Upload, Box, Settings } from 'lucide-react';
+import { Plus, Upload, Box, Settings, FileText } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { ProviderList } from './components/ProviderList';
 import { AddProviderForm } from './components/AddProviderForm';
@@ -13,6 +13,7 @@ import { ModelSelector } from './components/ModelSelector';
 import { ThemeToggle } from './components/ui/ThemeToggle';
 import { DynamicBackground } from './components/ui/DynamicBackground';
 import { BackgroundSettings } from './components/BackgroundSettings';
+import { SystemPromptEditor } from './components/SystemPromptEditor';
 import { BackgroundProvider } from './contexts/BackgroundContext';
 import { useProviders } from './hooks/useProviders';
 import { useModal } from './hooks/useModal';
@@ -45,6 +46,7 @@ function App() {
   const addModal = useModal();
   const batchModal = useModal();
   const settingsModal = useModal();
+  const promptModal = useModal();
 
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -178,6 +180,24 @@ function App() {
                                <Button 
                                   variant="ghost" 
                                   className="justify-center lg:justify-start gap-3 text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 h-12 w-12 lg:w-full p-0 lg:px-4 group rounded-xl"
+                                  onClick={promptModal.open}
+                               >
+                                  <FileText size={20} className="group-hover:scale-110 transition-transform shrink-0" />
+                                  <span className="hidden lg:block font-medium truncate">系统提示词</span>
+                               </Button>
+                             </div>
+                           </TooltipTrigger>
+                           <TooltipContent side="right" className="lg:hidden">
+                             <p>系统提示词</p>
+                           </TooltipContent>
+                         </Tooltip>
+
+                         <Tooltip>
+                           <TooltipTrigger asChild>
+                             <div className="w-full flex justify-center lg:block">
+                               <Button 
+                                  variant="ghost" 
+                                  className="justify-center lg:justify-start gap-3 text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 h-12 w-12 lg:w-full p-0 lg:px-4 group rounded-xl"
                                   onClick={settingsModal.open}
                                >
                                   <Settings size={20} className="group-hover:rotate-90 transition-transform duration-500 shrink-0" />
@@ -257,7 +277,25 @@ function App() {
                                             <BackgroundSettings />
                                           </div>
                                         </DialogContent>
-                                      </Dialog>                  {confirmDialog && (
+                                      </Dialog>
+
+                                      <Dialog open={promptModal.isOpen} onOpenChange={(open) => !open && promptModal.close()}>
+                                        <DialogContent className="max-w-5xl h-[80vh] flex flex-col !rounded-3xl !p-0 gap-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-2xl overflow-hidden">
+                                          <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200/10 dark:border-white/10 shrink-0">
+                                            <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">系统提示词</DialogTitle>
+                                          </div>
+                                          <div className="overflow-y-auto flex-1">
+                                            <SystemPromptEditor 
+                                              onNotify={(message, type) => {
+                                                if (type === 'error') toast.error(message);
+                                                else toast.success(message);
+                                              }}
+                                            />
+                                          </div>
+                                        </DialogContent>
+                                      </Dialog>
+
+                  {confirmDialog && (
                     <ConfirmDialog
                       isOpen={confirmDialog.isOpen}
                       title={confirmDialog.title}

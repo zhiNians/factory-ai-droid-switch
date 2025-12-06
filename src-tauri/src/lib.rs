@@ -6,7 +6,7 @@ pub mod model_manager;
 pub mod models;
 pub mod provider_manager;
 
-use models::{AppConfig, BalanceInfo, ModelInfo, Provider, ReasoningLevel};
+use models::{AppConfig, BalanceInfo, ModelInfo, Provider, ReasoningLevel, PromptTemplate};
 use std::collections::HashMap;
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuBuilder, MenuItem},
@@ -316,6 +316,67 @@ async fn get_current_api_key() -> Result<Option<String>, String> {
     droid_config::get_factory_api_key_env()
 }
 
+// ==================== 系统提示词管理命令 ====================
+
+/// 获取用户级别系统提示词
+#[tauri::command]
+async fn get_user_system_prompt() -> Result<String, String> {
+    droid_config::get_user_system_prompt()
+}
+
+/// 保存用户级别系统提示词
+#[tauri::command]
+async fn set_user_system_prompt(content: String) -> Result<(), String> {
+    droid_config::set_user_system_prompt(&content)
+}
+
+/// 获取 AGENTS.md 文件路径
+#[tauri::command]
+async fn get_agents_md_file_path() -> Result<String, String> {
+    droid_config::get_agents_md_file_path()
+}
+
+/// 获取所有提示词模板
+#[tauri::command]
+async fn get_all_prompt_templates() -> Result<Vec<PromptTemplate>, String> {
+    droid_config::get_all_prompt_templates()
+}
+
+/// 获取推荐提示词模板
+#[tauri::command]
+async fn get_recommended_prompt_templates() -> Result<Vec<PromptTemplate>, String> {
+    Ok(droid_config::get_recommended_prompt_templates())
+}
+
+/// 添加自定义提示词模板
+#[tauri::command]
+async fn add_prompt_template(
+    name: String, 
+    content: String, 
+    description: Option<String>, 
+    category: Option<String>
+) -> Result<PromptTemplate, String> {
+    droid_config::add_prompt_template(name, content, description, category)
+}
+
+/// 删除提示词模板
+#[tauri::command]
+async fn remove_prompt_template(id: String) -> Result<(), String> {
+    droid_config::remove_prompt_template(id)
+}
+
+/// 应用提示词模板
+#[tauri::command]
+async fn apply_prompt_template(id: String) -> Result<(), String> {
+    droid_config::apply_prompt_template(id)
+}
+
+/// 获取当前激活的模板 ID
+#[tauri::command]
+async fn get_active_template_id() -> Result<Option<String>, String> {
+    droid_config::get_active_template_id()
+}
+
 // ==================== 模型管理命令 ====================
 
 /// 获取所有可用模型
@@ -434,6 +495,16 @@ pub fn run() {
             refresh_all_balances,
             // 环境变量
             get_current_api_key,
+            // 系统提示词
+            get_user_system_prompt,
+            set_user_system_prompt,
+            get_agents_md_file_path,
+            get_all_prompt_templates,
+            get_recommended_prompt_templates,
+            add_prompt_template,
+            remove_prompt_template,
+            apply_prompt_template,
+            get_active_template_id,
             // 模型管理
             get_available_models,
             get_selected_model,
